@@ -18,6 +18,14 @@ Lint: `npm run lint`
 - Do not use `next dev --webpack` as a fallback. This repository's development graph can fail on `undici` imports such as `node:console`; development is expected to use Turbopack.
 - Next.js may append a generated `BEGIN:nextjs-agent-rules` block to `AGENTS.md` when `next dev` starts. Treat that as generated tooling output, verify it with `git status`, and do not include it in an unrelated feature commit.
 
+### Feature documentation
+
+- Documentation is part of feature completion. Whenever a user-visible capability is added or changed, update the appropriate Markdown documentation in the same change without waiting for a separate request.
+- `docs/visual-cards.md` is the canonical compatibility record for Pi Web-specific AI response formats and renderer capabilities.
+- Whenever a feature adds or changes an AI-authored format, visual component, protocol field, streaming state, fallback, copy/export behavior, prompt capability, or rendering security boundary, update `docs/visual-cards.md` in the same change.
+- Record the wire format, strict limits, user-visible behavior, non-visual fallback, prompt integration, tests, and cross-renderer requirements so another renderer can implement compatible behavior. Keep proposed features clearly separate from shipped behavior.
+- A new `pi-ui` component is not complete until its schema, catalog/prompt example, trusted renderer, Markdown fallback, export path, localization, responsive behavior, and compatibility documentation are updated together.
+
 ---
 
 ## Architecture
@@ -91,6 +99,7 @@ lib/
   types.ts            shared TypeScript types
   normalize.ts        normalizeToolCalls() — field name mismatch between file format and our types
   worktree.ts         project/worktree resolution and git worktree operations
+  visual/             pi-ui schemas, parsing, prompts, Markdown fallback, and export conversion
 
 components/
   AppShell.tsx        layout + URL state + tab management
@@ -109,6 +118,7 @@ components/
   FileIcons.tsx       file icon helpers
   FileViewer.tsx      file content in a tab
   TabBar.tsx          tab bar (Chat + open file tabs)
+  visual/             trusted pi-ui card boundary, renderer registry, and card views
 
 hooks/
   useAgentSession.ts  messages + streaming + SSE + fork/navigate/reconciliation logic

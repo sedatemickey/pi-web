@@ -35,6 +35,7 @@ import { buildSubagentPromptPlan } from "./subagent-prompt";
 import { appendSubagentInputFiles, loadSubagentInputFiles } from "./subagent-input";
 import { projectTrustReloadOptions } from "./project-trust";
 import { resolveShellTools } from "./powershell-settings";
+import { appendVisualCardPrompt, withVisualCardPrompt } from "./visual/prompt";
 import { isBuiltInSubagentsEnabled, readSubagentSettings } from "./subagent-settings";
 import { SubagentQueue } from "./subagent-queue";
 import { addWorktree, removeWorktree } from "./worktree";
@@ -198,6 +199,7 @@ export function createSubagentController(
               }
             : {}),
           appendSystemPrompt,
+          appendSystemPromptOverride: appendVisualCardPrompt,
         },
         ...((profile.loadExtensions || profile.loadSkills)
           ? { resourceLoaderReloadOptions: projectTrustReloadOptions(childCwd, agentDir) }
@@ -253,7 +255,7 @@ export function createSubagentController(
       });
       dependencies.registerSession(inner, {
         ...(promptPlan.exactSystemPrompt !== undefined
-          ? { exactSystemPrompt: promptPlan.exactSystemPrompt }
+          ? { exactSystemPrompt: withVisualCardPrompt(promptPlan.exactSystemPrompt) }
           : {}),
         chatOnly,
       });

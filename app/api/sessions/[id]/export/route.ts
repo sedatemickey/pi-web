@@ -1,12 +1,13 @@
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { basename, dirname, join } from "path";
 import { promisify } from "util";
 import { fileURLToPath, pathToFileURL } from "url";
 import { NextResponse } from "next/server";
 import { resolveSessionPath } from "@/lib/session-reader";
+import { transformSessionJsonlVisualCards } from "@/lib/visual/session-export";
 
 const execFileAsync = promisify(execFile);
 
@@ -238,6 +239,16 @@ async function exportSession(filePath: string, outputPath: string): Promise<void
   await exportFromFile(filePath, outputPath);
 }
 
+function prepareVisualExportInput(filePath: string, tempDir: string): { inputPath: string; temporary: boolean } {
+  const source = readFileSync(filePath, "utf8");
+  const transformed = transformSessionJsonlVisualCards(source);
+  if (!transformed.changed) return { inputPath: filePath, temporary: false };
+
+  const inputPath = join(tempDir, `${randomUUID()}.jsonl`);
+  writeFileSync(inputPath, transformed.content, "utf8");
+  return { inputPath, temporary: true };
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -257,9 +268,10 @@ export async function GET(
     const sessionBase = basename(filePath, ".jsonl");
     const fileName = `pi-session-${sessionBase}.html`;
     const outputPath = join(tempDir, `${randomUUID()}.html`);
+    const exportInput = prepareVisualExportInput(filePath, tempDir);
 
     try {
-      await exportSession(filePath, outputPath);
+      await exportSession(exportInput.inputPath, outputPath);
 
       const html = readFileSync(outputPath, "utf8");
       const patchedHtml = patchExportHtml(html);
@@ -275,6 +287,7 @@ export async function GET(
       });
     } finally {
       rmSync(outputPath, { force: true });
+      if (exportInput.temporary) rmSync(exportInput.inputPath, { force: true });
     }
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

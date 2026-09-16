@@ -4,24 +4,28 @@ Pi Web treats an explicitly empty tool selection as **Chat only**, not merely as
 an AgentSession whose active tool array happens to be empty.
 
 For a normal session, Chat only loads no extensions, skills, prompt templates,
-themes, or Pi base system prompt. Its exact system prompt is the ordered content
-of the context files discovered by Pi's default loader, including global and
-project `AGENTS.md`, `AGENTS.override.md`, and `CLAUDE.md` files. Pi Web does not
-add its own prefix, suffix, or current-working-directory text.
+themes, or Pi base system prompt. Its resource-derived prompt is the ordered
+content of the context files discovered by Pi's default loader, including global
+and project `AGENTS.md`, `AGENTS.override.md`, and `CLAUDE.md` files. Pi Web does
+not add a persona, tool guide, or current-working-directory text. It appends only
+the host visual-card capability contract that describes the declarative `pi-ui`
+blocks this client can render; that contract does not load resources or expose
+additional tools.
 
 For a subagent whose resolved profile has no tools and has both resource-loading
 switches disabled, Chat only loads no extensions, skills, prompt templates,
-themes, context files, or Pi base system prompt. Its exact system prompt is the
-profile system prompt. If parent context inheritance is enabled, that context is
-included with the delegated user task instead of being appended to the system
-prompt. A profile may opt into skills or extensions independently. Extension
-tools are activated alongside the profile's built-in tools except for Pi Web's
-reserved subagent-control tools, which remain excluded to prevent nested Agent
-dispatch.
+themes, context files, or Pi base system prompt. Its resource-derived prompt is
+the profile system prompt followed by the same host visual-card capability
+contract. If parent context inheritance is enabled, that context is included
+with the delegated user task instead of being appended to the system prompt. A
+profile may opt into skills or extensions independently. Extension tools are
+activated alongside the profile's built-in tools except for Pi Web's reserved
+subagent-control tools, which remain excluded to prevent nested Agent dispatch.
 
 The host may resolve `input_files` before dispatch and include their UTF-8 text
 in the delegated user task. This is input preparation, not a subagent tool: it
-does not change the active tool list or the exact Chat-only system prompt.
+does not change the active tool list, resource-derived prompt, or host capability
+contract.
 
 Pi's native session format does not persist the active tool selection. Normal
 sessions therefore append versioned `pi-web:tool-selection` custom entries:
@@ -43,9 +47,10 @@ snapshot records their active tools and the profile's skill and extension
 loading switches so reopened sessions retain the same resource policy.
 
 The persisted selection must be resolved before `createAgentSessionServices()`
-so Chat only never imports or executes session extensions. The exact system
-prompt must also be reapplied after Pi's `before_agent_start` phase, because the
-SDK rebuilds its base prompt immediately before the model call.
+so Chat only never imports or executes session extensions. The resource-derived
+prompt plus the host capability contract must also be reapplied after Pi's
+`before_agent_start` phase, because the SDK rebuilds its base prompt immediately
+before the model call.
 
 Changing among nonempty tool presets can update an existing wrapper. Crossing
 the Chat-only boundary must append the new selection and rebuild the wrapper:

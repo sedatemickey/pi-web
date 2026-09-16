@@ -18,6 +18,7 @@ const {
 } = await jiti.import("./MessageView.tsx");
 const { I18nProvider } = await jiti.import("@/hooks/useI18n");
 const { splitFinalAssistantBlocks } = await jiti.import("@/lib/message-display");
+const { VISUAL_CARD_CATALOG } = await jiti.import("@/lib/visual/catalog");
 
 function renderMessage(message, props = {}) {
   return renderToStaticMarkup(
@@ -28,6 +29,24 @@ function renderMessage(message, props = {}) {
     ),
   );
 }
+
+test("enables visual cards for assistant text but not user text", () => {
+  const markdown = `\`\`\`pi-ui\n${JSON.stringify(VISUAL_CARD_CATALOG.steps.example)}\n\`\`\``;
+  const assistantHtml = renderMessage({
+    role: "assistant",
+    provider: "anthropic",
+    model: "claude-test",
+    content: [{ type: "text", text: markdown }],
+  });
+  const userHtml = renderMessage({ role: "user", content: markdown });
+
+  assert.match(assistantHtml, /data-visual-type="steps"/);
+  assert.match(assistantHtml, /data-copy-mode="raw"/);
+  assert.match(assistantHtml, /data-copy-mode="readable"/);
+  assert.match(assistantHtml, /Copy readable text/);
+  assert.doesNotMatch(userHtml, /data-visual-state=/);
+  assert.match(userHtml, /markdown-code-block/);
+});
 
 test("updates a reused message when its written files change", () => {
   const props = { message: { role: "assistant", content: [] } };

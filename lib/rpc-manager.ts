@@ -42,6 +42,7 @@ import { createSubagentController } from "./subagent-runtime";
 import { isBuiltInSubagentsEnabled } from "./subagent-settings";
 import { resolveShellTools } from "./powershell-settings";
 import { CHAT_ONLY_RESOURCE_LOADER_OPTIONS, contextFilesSystemPrompt } from "./chat-only";
+import { appendVisualCardPrompt, withVisualCardPrompt } from "./visual/prompt";
 import {
   appendSessionToolSelection,
   readSessionToolSelection,
@@ -2038,10 +2039,12 @@ export async function startRpcSession(
                 }
               : {}),
             appendSystemPrompt: subagentResources.appendSystemPrompt,
+            appendSystemPromptOverride: appendVisualCardPrompt,
           }
         : chatOnly
           ? CHAT_ONLY_RESOURCE_LOADER_OPTIONS
         : {
+            appendSystemPromptOverride: appendVisualCardPrompt,
             extensionFactories: [
               createProjectCommandBashExtension({
                 cwd: sessionCwd,
@@ -2121,11 +2124,11 @@ export async function startRpcSession(
     }
 
     const exactSystemPrompt = subagentResources?.exactSystemPrompt !== undefined
-      ? () => subagentResources.exactSystemPrompt!
+      ? () => withVisualCardPrompt(subagentResources.exactSystemPrompt!)
       : chatOnly
         ? subagentResources
-          ? () => subagentResources.appendSystemPrompt[0] ?? ""
-          : () => contextFilesSystemPrompt(inner.resourceLoader.getAgentsFiles().agentsFiles)
+          ? () => withVisualCardPrompt(subagentResources.appendSystemPrompt[0] ?? "")
+          : () => withVisualCardPrompt(contextFilesSystemPrompt(inner.resourceLoader.getAgentsFiles().agentsFiles))
         : undefined;
     const wrapper = new AgentSessionWrapper(inner, {
       exactSystemPrompt,

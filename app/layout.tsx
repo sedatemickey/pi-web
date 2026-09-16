@@ -64,6 +64,7 @@ export default function RootLayout({
       <head>
         <meta name="google" content="notranslate" />
         <script
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: THEME_INIT_SCRIPT,
           }}

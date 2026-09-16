@@ -15,6 +15,7 @@ import { isThinkingExpandedByDefault, THINKING_EXPANDED_EVENT } from "@/lib/thin
 import { TurnWrittenFiles } from "./TurnWrittenFiles";
 import type { WrittenFile } from "@/lib/turn-written-files";
 import { skillExpansionToCommand } from "@/lib/slash-display";
+import { transformVisualCardsToMarkdown } from "@/lib/visual/markdown-source";
 import type { SubagentToolDetails } from "@/lib/subagent-extension";
 import type {
   AgentMessage,
@@ -630,7 +631,7 @@ function AssistantMessageView({
   const blocks = useMemo(() => blockItems.map(({ block }) => block), [blockItems]);
   const providerError = getAssistantErrorMessage(message, { isStreaming });
   const [hovered, setHovered] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedMode, setCopiedMode] = useState<"raw" | "readable" | null>(null);
   const streamStartRef = useRef<number | null>(null);
   const [tps, setTps] = useState<number | null>(null);
   const blockItemsRef = useRef(blockItems);
@@ -688,10 +689,16 @@ function AssistantMessageView({
     .map((b) => b.text)
     .join("\n");
 
-  const copyContent = () => {
-    copyText(textContent).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+  const readableTextContent = useMemo(
+    () => isStreaming ? textContent : transformVisualCardsToMarkdown(textContent),
+    [isStreaming, textContent],
+  );
+  const hasReadableCopy = readableTextContent !== textContent;
+
+  const copyContent = (mode: "raw" | "readable") => {
+    copyText(mode === "raw" ? textContent : readableTextContent).then(() => {
+      setCopiedMode(mode);
+      setTimeout(() => setCopiedMode((current) => current === mode ? null : current), 1500);
     });
   };
 
@@ -838,37 +845,68 @@ function AssistantMessageView({
           </div>
         )}
         {textContent && !isStreaming && (
-          <button
-            onClick={copyContent}
-             title={t("i18n.copyMessage")}
-            style={{
-              display: "flex", alignItems: "center", gap: 4,
-              padding: "3px 8px", height: 22,
-              background: "none", border: "none",
-              borderRadius: 5,
-              color: copied ? "var(--accent)" : "var(--text-dim)",
-              cursor: "pointer",
-              fontSize: 11, fontWeight: 400,
-              whiteSpace: "nowrap",
-              opacity: hovered ? 1 : 0,
-              pointerEvents: hovered ? "auto" : "none",
-              transition: "opacity 0.12s, color 0.12s",
-            }}
-            onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = "var(--accent)"; }}
-            onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = "var(--text-dim)"; }}
-          >
-            {copied ? (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            ) : (
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
+          <>
+            <button
+              type="button"
+              data-copy-mode="raw"
+              onClick={() => copyContent("raw")}
+              title={t("i18n.copyMessage")}
+              style={{
+                display: "flex", alignItems: "center", gap: 4,
+                padding: "3px 8px", height: 22,
+                background: "none", border: "none",
+                borderRadius: 5,
+                color: copiedMode === "raw" ? "var(--accent)" : "var(--text-dim)",
+                cursor: "pointer",
+                fontSize: 11, fontWeight: 400,
+                whiteSpace: "nowrap",
+                opacity: hovered ? 1 : 0,
+                pointerEvents: hovered ? "auto" : "none",
+                transition: "opacity 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => { if (copiedMode !== "raw") e.currentTarget.style.color = "var(--accent)"; }}
+              onMouseLeave={(e) => { if (copiedMode !== "raw") e.currentTarget.style.color = "var(--text-dim)"; }}
+            >
+              {copiedMode === "raw" ? (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              ) : (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              )}
+              {copiedMode === "raw" ? t("i18n.copied") : t("i18n.copy")}
+            </button>
+            {hasReadableCopy && (
+              <button
+                type="button"
+                data-copy-mode="readable"
+                onClick={() => copyContent("readable")}
+                title={t("visual.copyReadable")}
+                style={{
+                  height: 22,
+                  padding: "3px 8px",
+                  border: "none",
+                  borderRadius: 5,
+                  background: "none",
+                  color: copiedMode === "readable" ? "var(--accent)" : "var(--text-dim)",
+                  cursor: "pointer",
+                  fontSize: 11,
+                  fontWeight: 400,
+                  whiteSpace: "nowrap",
+                  opacity: hovered ? 1 : 0,
+                  pointerEvents: hovered ? "auto" : "none",
+                  transition: "opacity 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => { if (copiedMode !== "readable") e.currentTarget.style.color = "var(--accent)"; }}
+                onMouseLeave={(e) => { if (copiedMode !== "readable") e.currentTarget.style.color = "var(--text-dim)"; }}
+              >
+                {copiedMode === "readable" ? t("i18n.copied") : t("visual.copyReadable")}
+              </button>
             )}
-             {copied ? t("i18n.copied") : t("i18n.copy")}
-          </button>
+          </>
         )}
         {time && !isStreaming && (
           <span style={{ fontSize: 10, color: "var(--text-dim)", marginLeft: "auto" }}>{time}</span>
@@ -895,7 +933,7 @@ function BlockView({ block, searchTarget, toolResults, isStreaming, streamingDur
 }
 
 function TextBlock({ block, isStreaming, cwd, onOpenFile }: { block: TextContent; isStreaming?: boolean; cwd?: string; onOpenFile?: (filePath: string) => void }) {
-  return <SafeMarkdownBody isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</SafeMarkdownBody>;
+  return <SafeMarkdownBody allowVisualCards isStreaming={isStreaming} cwd={cwd} onOpenFile={onOpenFile}>{block.text}</SafeMarkdownBody>;
 }
 
 export function ThinkingBlock({ block, duration, sessionId, entryId, blockIndex }: {

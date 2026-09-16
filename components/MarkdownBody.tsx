@@ -1,39 +1,56 @@
 "use client";
 
 import { useMemo, type MouseEvent } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
+import ReactMarkdown, { type Components, type Options as ReactMarkdownOptions } from "react-markdown";
 import { resolveLocalFileHref, shouldOpenLocalFileInApp } from "@/lib/file-links";
 import { encodeFilePathForApi } from "@/lib/file-paths";
 import { markdownRehypePlugins, markdownRemarkPlugins, markdownUrlTransform, normalizeDisplayMath } from "@/lib/markdown";
+import { rehypeVisualCards } from "@/lib/visual/markdown";
 import { MermaidBlock, CodeBlock } from "./MermaidBlock";
+import { VisualBlock } from "./visual/VisualBlock";
 
 interface MarkdownBodyProps {
   children: string;
   className?: string;
   isStreaming?: boolean;
+  allowVisualCards?: boolean;
   cwd?: string;
   onOpenFile?: (filePath: string) => void;
 }
 
-export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile }: MarkdownBodyProps) {
+const markdownVisualRehypePlugins = [
+  ...(markdownRehypePlugins ?? []),
+  rehypeVisualCards,
+] as NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
+
+export function MarkdownBody({ children, className, isStreaming, allowVisualCards = false, cwd, onOpenFile }: MarkdownBodyProps) {
   const normalizedMarkdown = useMemo(() => normalizeDisplayMath(children), [children]);
   // Stable renderer identities keep stateful blocks mounted across message hover updates.
   const components = useMemo<Components>(() => ({
-    code({ className, children, ...props }) {
+    code({ node, className, children, ...props }) {
       const lang = className?.replace("language-", "").toLowerCase() ?? "";
       const raw = String(children);
+      const blockSource = raw.replace(/\n$/, "");
       const isBlock = className?.includes("language-") || raw.includes("\n");
       if (isBlock) {
+        const visualState = node?.properties?.dataPiVisualState;
+        if (
+          allowVisualCards
+          && lang === "pi-ui"
+          && (visualState === "complete" || visualState === "incomplete" || visualState === "limit-exceeded")
+        ) {
+          return <VisualBlock source={blockSource} state={visualState} isStreaming={isStreaming} />;
+        }
         if (lang === "mermaid") {
           return (
             <MermaidBlock
-              code={raw.replace(/\n$/, "")}
+              code={blockSource}
               isStreaming={isStreaming}
               defaultPreview
             />
           );
         }
-        return <CodeBlock code={raw.replace(/\n$/, "")} lang={lang} isStreaming={isStreaming} />;
+        return <CodeBlock code={blockSource} lang={lang} isStreaming={isStreaming} />;
       }
       return (
         <code
@@ -91,13 +108,13 @@ export function MarkdownBody({ children, className, isStreaming, cwd, onOpenFile
         </div>
       );
     },
-  }), [cwd, isStreaming, onOpenFile]);
+  }), [allowVisualCards, cwd, isStreaming, onOpenFile]);
 
   return (
     <div className={["markdown-body", className].filter(Boolean).join(" ")}>
       <ReactMarkdown
         remarkPlugins={markdownRemarkPlugins}
-        rehypePlugins={markdownRehypePlugins}
+        rehypePlugins={allowVisualCards ? markdownVisualRehypePlugins : markdownRehypePlugins}
         urlTransform={onOpenFile ? markdownUrlTransform : undefined}
         components={components}
       >

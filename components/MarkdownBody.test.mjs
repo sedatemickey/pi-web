@@ -10,6 +10,7 @@ const jiti = createJiti(import.meta.url, {
 });
 const { MarkdownBody } = await jiti.import("./MarkdownBody.tsx");
 const { normalizeDisplayMath } = await jiti.import("../lib/markdown.ts");
+const { VISUAL_CARD_CATALOG } = await jiti.import("../lib/visual/catalog.ts");
 const { I18nProvider } = await jiti.import("@/hooks/useI18n");
 
 function renderMarkdown(markdown, props = {}) {
@@ -143,4 +144,70 @@ test("keeps Mermaid source visible while the response is streaming", () => {
   assert.doesNotMatch(html, /mermaid-block-loading/);
   assert.match(html, />Preview</);
   assert.match(html, /A --&gt; B/);
+});
+
+function visualFence(card, closing = true) {
+  return `\`\`\`pi-ui\n${JSON.stringify(card, null, 2)}${closing ? "\n```" : ""}`;
+}
+
+test("renders a valid visual card only when explicitly enabled", () => {
+  const markdown = visualFence(VISUAL_CARD_CATALOG.metrics.example);
+  const disabled = renderMarkdown(markdown);
+  const enabled = renderMarkdown(markdown, { allowVisualCards: true });
+
+  assert.doesNotMatch(disabled, /data-visual-state=/);
+  assert.match(disabled, /markdown-code-block/);
+  assert.match(enabled, /data-visual-state="complete"/);
+  assert.match(enabled, /data-visual-type="metrics"/);
+  assert.match(enabled, /visual-metrics/);
+  assert.match(enabled, /Release status/);
+  assert.doesNotMatch(enabled, /&quot;version&quot;/);
+});
+
+test("hides incomplete visual JSON behind a streaming placeholder", () => {
+  const markdown = visualFence({ ...VISUAL_CARD_CATALOG.steps.example, fallback: "unfinished-secret" }, false);
+  const html = renderMarkdown(markdown, { allowVisualCards: true, isStreaming: true });
+
+  assert.match(html, /data-visual-state="incomplete"/);
+  assert.match(html, /aria-busy="true"/);
+  assert.doesNotMatch(html, /unfinished-secret/);
+});
+
+test("marks an interrupted visual block as an error with source access", () => {
+  const markdown = visualFence(VISUAL_CARD_CATALOG.steps.example, false);
+  const html = renderMarkdown(markdown, { allowVisualCards: true, isStreaming: false });
+
+  assert.match(html, /data-visual-state="error"/);
+  assert.match(html, /This visual card was not completed/);
+  assert.match(html, />Source</);
+});
+
+test("shows a bounded fallback for a complete card with an invalid schema", () => {
+  const invalid = { ...VISUAL_CARD_CATALOG.metrics.example, type: "future-card", fallback: "Readable fallback." };
+  const html = renderMarkdown(visualFence(invalid), { allowVisualCards: true });
+
+  assert.match(html, /data-visual-state="error"/);
+  assert.match(html, /Readable fallback/);
+  assert.match(html, /does not match the supported format/);
+});
+
+test("leaves nested pi-ui examples as source", () => {
+  const nested = `- Example:\n\n  ${visualFence(VISUAL_CARD_CATALOG.comparison.example).replaceAll("\n", "\n  ")}`;
+  const html = renderMarkdown(nested, { allowVisualCards: true });
+
+  assert.doesNotMatch(html, /data-visual-state=/);
+  assert.match(html, /markdown-code-block/);
+  assert.match(html, /&quot;storage-options&quot;/);
+});
+
+test("limits the number of visual cards in one text block", () => {
+  const markdown = Array.from({ length: 13 }, (_, index) => visualFence({
+    ...VISUAL_CARD_CATALOG.metrics.example,
+    id: `metric-${index}`,
+  })).join("\n\n");
+  const html = renderMarkdown(markdown, { allowVisualCards: true });
+
+  assert.equal((html.match(/data-visual-state="complete"/g) ?? []).length, 12);
+  assert.equal((html.match(/data-visual-state="error"/g) ?? []).length, 1);
+  assert.match(html, /too many visual cards/);
 });
