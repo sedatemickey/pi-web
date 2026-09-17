@@ -1,4 +1,37 @@
-# Pi Web
+# Pi Web (Enhanced)
+
+An enhanced version of [Pi Web](https://github.com/agegr/pi-web), the local browser UI for the [pi coding agent](https://github.com/earendil-works/pi). This fork tracks upstream `main` and adds the enhancements below; the original Pi Web README continues below the divider.
+
+## What This Fork Adds
+
+### Declarative visual cards (`pi-ui`)
+
+AI replies can include trusted, structured visual components alongside normal Markdown. The model emits small declarative JSON blocks in fenced `pi-ui` code, and a trusted renderer turns them into 17 card types:
+
+- **Foundation** — `metrics`, `comparison`, `steps`
+- **Interactive** — `tabs`, `accordion`, `data-table`, with keyboard-accessible tabs and searchable, sortable, paginated tables (CSV download included)
+- **Charts** — `bar-chart`, `line-chart`, `area-chart`, `donut-chart`, `sparkline`, `heatmap`, rendered statically with host-controlled styling and a visually hidden data table for screen readers and non-visual contexts
+- **Information** — `status`, `key-value`, `progress`, `checklist`, `callout`
+
+The protocol is built around a strict security and compatibility boundary:
+
+- Every block passes strict schema validation (type, enum, size, depth, and count limits); invalid or unsupported source renders as the original code instead of a broken card.
+- The model supplies **data only** — no HTML, scripts, URLs, styles, colors, icons, formatting functions, or actions. All appearance and interaction is host-controlled.
+- Every card type has a Markdown fallback, a raw-source view, raw/readable copy actions, TSV/CSV export for tables, and conversion in exported session HTML.
+- Cards render progressively as a response streams in, once their code fence completes.
+
+### Pi UI capability settings
+
+A new **Pi UI** settings page controls which card types models may generate:
+
+- A master switch plus an independent toggle for each of the 17 components, with live previews, field constraints, and JSON examples.
+- Settings are stored globally in `~/.pi/agent/pi-ui/settings.json` and filter the advertised card types out of the system prompt for main, Chat-only, restored, and subagent sessions.
+- Switches affect **model prompting only** — cards already in session history always keep rendering.
+- A server-tracked per-session generation tells you exactly which live sessions need a reload to pick up new prompting, including freshly created, unsent chats.
+
+Full wire format, limits, fallback behavior, and cross-renderer requirements are documented in [docs/visual-cards.md](./docs/visual-cards.md).
+
+---
 
 [中文文档](./README.zh-CN.md) | [日本語](./README.ja.md) | [Русский](./README.ru.md)
 
