@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/hooks/useI18n";
 import { getVisualCardFallback, parseVisualCard, type VisualCardParseErrorCode } from "@/lib/visual/parse";
 import type { VisualFenceRenderState } from "@/lib/visual/markdown";
@@ -26,16 +26,25 @@ function errorKey(code: VisualCardParseErrorCode): string {
 export const VisualBlock = memo(function VisualBlock({ source, state, isStreaming }: VisualBlockProps) {
   const { t } = useI18n();
   const [showSource, setShowSource] = useState(false);
+  const cardToggleRef = useRef<HTMLButtonElement>(null);
+  const sourceToggleRef = useRef<HTMLButtonElement>(null);
   const parsed = useMemo(() => state === "complete" ? parseVisualCard(source) : null, [source, state]);
   const fallback = useMemo(() => parsed && !parsed.ok ? getVisualCardFallback(source) : null, [parsed, source]);
 
-  if (showSource) {
+  const setSourceVisible = (visible: boolean) => {
+    setShowSource(visible);
+    requestAnimationFrame(() => {
+      (visible ? sourceToggleRef : cardToggleRef).current?.focus();
+    });
+  };
+
+  if (showSource && (!parsed || !parsed.ok)) {
     return (
       <CodeBlock
         code={source}
         lang="pi-ui"
         headerAction={(
-          <button type="button" className="markdown-code-action" onClick={() => setShowSource(false)}>
+          <button ref={sourceToggleRef} type="button" className="markdown-code-action" onClick={() => setSourceVisible(false)}>
             {t("visual.showCard")}
           </button>
         )}
@@ -69,7 +78,7 @@ export const VisualBlock = memo(function VisualBlock({ source, state, isStreamin
       <section className="visual-block visual-block-error" data-visual-state="error" aria-label={t("visual.card")}>
         <div className="visual-block-header">
           <h3>{t("visual.card")}</h3>
-          <button type="button" className="visual-source-button" onClick={() => setShowSource(true)}>
+          <button ref={cardToggleRef} type="button" className="visual-source-button" onClick={() => setSourceVisible(true)}>
             {t("visual.showSource")}
           </button>
         </div>
@@ -82,16 +91,35 @@ export const VisualBlock = memo(function VisualBlock({ source, state, isStreamin
   }
 
   return (
-    <section className="visual-block" data-visual-state="complete" data-visual-type={parsed.card.type} aria-label={parsed.card.title}>
-      <div className="visual-block-header">
-        <h3>{parsed.card.title}</h3>
-        <button type="button" className="visual-source-button" onClick={() => setShowSource(true)}>
-          {t("visual.showSource")}
-        </button>
-      </div>
-      <VisualErrorBoundary fallback={<div className="visual-error-body" role="status">{t("visual.error.render")}</div>}>
-        <CardRenderer card={parsed.card} />
-      </VisualErrorBoundary>
-    </section>
+    <>
+      {showSource && (
+        <CodeBlock
+          code={source}
+          lang="pi-ui"
+          headerAction={(
+            <button ref={sourceToggleRef} type="button" className="markdown-code-action" onClick={() => setSourceVisible(false)}>
+              {t("visual.showCard")}
+            </button>
+          )}
+        />
+      )}
+      <section
+        className="visual-block"
+        data-visual-state="complete"
+        data-visual-type={parsed.card.type}
+        aria-label={parsed.card.title}
+        hidden={showSource}
+      >
+        <div className="visual-block-header">
+          <h3>{parsed.card.title}</h3>
+          <button ref={cardToggleRef} type="button" className="visual-source-button" onClick={() => setSourceVisible(true)}>
+            {t("visual.showSource")}
+          </button>
+        </div>
+        <VisualErrorBoundary fallback={<div className="visual-error-body" role="status">{t("visual.error.render")}</div>}>
+          <CardRenderer card={parsed.card} />
+        </VisualErrorBoundary>
+      </section>
+    </>
   );
 });

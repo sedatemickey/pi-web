@@ -42,7 +42,14 @@ import { createSubagentController } from "./subagent-runtime";
 import { isBuiltInSubagentsEnabled } from "./subagent-settings";
 import { resolveShellTools } from "./powershell-settings";
 import { CHAT_ONLY_RESOURCE_LOADER_OPTIONS, contextFilesSystemPrompt } from "./chat-only";
-import { appendVisualCardPrompt, withVisualCardPrompt } from "./visual/prompt";
+import { appendConfiguredPiUiPrompt, withConfiguredPiUiPrompt } from "./pi-ui-prompt";
+import {
+  clearPiUiSessionGeneration,
+  clearPiUiStartingSessionGeneration,
+  getPiUiSettingsGeneration,
+  setPiUiSessionGeneration,
+  setPiUiStartingSessionGeneration,
+} from "./pi-ui-session-state";
 import {
   appendSessionToolSelection,
   readSessionToolSelection,
@@ -116,6 +123,7 @@ type AgentSessionWrapperOptions = {
   chatOnly?: boolean;
   onAgentRunComplete?: AgentRunCompleteListener;
   suppressCompletionNotifications?: boolean;
+  piUiSettingsGeneration?: number;
 };
 
 const IDLE_RESET_EVENT_TYPES = new Set([
@@ -235,10 +243,13 @@ export class AgentSessionWrapper {
   private extensionsBound = false;
   private extensionBindingPromise: Promise<void> | null = null;
   private extensionBindingError: unknown = null;
-  private readonly exactSystemPrompt?: () => string;
+  private readonly exactSystemPromptFactory?: () => string;
+  private exactSystemPrompt?: string;
   private readonly chatOnly: boolean;
   private readonly onAgentRunComplete?: AgentRunCompleteListener;
   private readonly suppressCompletionNotifications: boolean;
+  private readonly piUiTrackedSessionId: string;
+  private piUiSettingsGeneration: number;
   private unsubscribe: (() => void) | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private onDestroyCallback: (() => void) | null = null;
@@ -251,10 +262,14 @@ export class AgentSessionWrapper {
     public readonly inner: AgentSessionLike,
     options: AgentSessionWrapperOptions = {},
   ) {
-    this.exactSystemPrompt = options.exactSystemPrompt;
+    this.exactSystemPromptFactory = options.exactSystemPrompt;
+    this.exactSystemPrompt = options.exactSystemPrompt?.();
     this.chatOnly = options.chatOnly ?? false;
     this.onAgentRunComplete = options.onAgentRunComplete;
     this.suppressCompletionNotifications = options.suppressCompletionNotifications ?? false;
+    this.piUiTrackedSessionId = inner.sessionId;
+    this.piUiSettingsGeneration = options.piUiSettingsGeneration ?? getPiUiSettingsGeneration();
+    setPiUiSessionGeneration(this.piUiTrackedSessionId, this.piUiSettingsGeneration);
     this.installExactSystemPromptContinuation();
     this.applyExactSystemPrompt();
   }
@@ -418,12 +433,29 @@ export class AgentSessionWrapper {
   }
 
   private applyExactSystemPrompt(): void {
-    if (!this.exactSystemPrompt || !this.inner.agent.state) return;
-    this.inner.agent.state.systemPrompt = this.exactSystemPrompt();
+    if (this.exactSystemPrompt === undefined || !this.inner.agent.state) return;
+    this.inner.agent.state.systemPrompt = this.exactSystemPrompt;
+  }
+
+  private refreshExactSystemPrompt(): void {
+    if (!this.exactSystemPromptFactory) return;
+    this.exactSystemPrompt = this.exactSystemPromptFactory();
+    this.applyExactSystemPrompt();
+  }
+
+  private async reloadInner(
+    options?: { beforeSessionStart?: () => void | Promise<void> },
+  ): Promise<void> {
+    const piUiSettingsGeneration = getPiUiSettingsGeneration();
+    this.syncProjectTrust();
+    await this.inner.reload(options);
+    this.refreshExactSystemPrompt();
+    this.piUiSettingsGeneration = piUiSettingsGeneration;
+    setPiUiSessionGeneration(this.piUiTrackedSessionId, piUiSettingsGeneration);
   }
 
   private installExactSystemPromptContinuation(): void {
-    if (!this.exactSystemPrompt) return;
+    if (this.exactSystemPrompt === undefined) return;
     const previous = this.inner.agent.prepareNextTurnWithContext;
     this.inner.agent.prepareNextTurnWithContext = async (turn, signal) => {
       const prepared = await previous?.(turn, signal);
@@ -431,7 +463,7 @@ export class AgentSessionWrapper {
         ...prepared,
         context: {
           ...(prepared?.context ?? turn.context),
-          systemPrompt: this.exactSystemPrompt!(),
+          systemPrompt: this.exactSystemPrompt!,
         },
       };
     };
@@ -951,8 +983,7 @@ export class AgentSessionWrapper {
         await this.waitForExtensionsBound();
         this.extensionStatuses.clear();
         this.resetExtensionWidgetsForReload();
-        this.syncProjectTrust();
-        await this.inner.reload();
+        await this.reloadInner();
         this.setActiveToolSelection(activeToolNames);
         if (typeof this.inner.bindExtensions !== "function") {
           this.inner.extensionRunner.setUIContext?.(this.createExtensionUiContext(), "rpc");
@@ -1023,6 +1054,7 @@ export class AgentSessionWrapper {
   destroy(): void {
     if (!this._alive) return;
     this._alive = false;
+    clearPiUiSessionGeneration(this.piUiTrackedSessionId);
     if (this.idleTimer) clearTimeout(this.idleTimer);
     if (this.inner.isBashRunning) this.inner.abortBash();
     this.unsubscribe?.();
@@ -1639,13 +1671,11 @@ export class AgentSessionWrapper {
       reload: async () => {
         this.extensionStatuses.clear();
         this.resetExtensionWidgetsForReload();
-        this.syncProjectTrust();
-        await this.inner.reload({
+        await this.reloadInner({
           beforeSessionStart: () => {
             this.inner.extensionRunner.setUIContext?.(this.createExtensionUiContext(), "rpc");
           },
         });
-        this.applyExactSystemPrompt();
       },
     };
   }
@@ -1698,9 +1728,10 @@ const SUBAGENT_CONTROLLER = createSubagentController({
   registerSession: (inner, options) => {
     const wrapper = new AgentSessionWrapper(inner, {
       ...(options?.exactSystemPrompt !== undefined
-        ? { exactSystemPrompt: () => options.exactSystemPrompt! }
+        ? { exactSystemPrompt: () => withConfiguredPiUiPrompt(options.exactSystemPrompt!) }
         : {}),
       chatOnly: options?.chatOnly,
+      piUiSettingsGeneration: options?.piUiSettingsGeneration,
       suppressCompletionNotifications: true,
     });
     registerRpcWrapper(wrapper);
@@ -1990,6 +2021,11 @@ export async function startRpcSession(
   );
   const chatOnly = selectedToolNames?.length === 0 && !subagentLoadsResources;
   const finishStartingSession = trackStartingSession(sessionCwd);
+  const piUiSettingsGeneration = getPiUiSettingsGeneration();
+  const piUiStartingSessionIds = [...new Set([sessionId, sessionManager.getSessionId()])];
+  for (const startingSessionId of piUiStartingSessionIds) {
+    setPiUiStartingSessionGeneration(startingSessionId, piUiSettingsGeneration);
+  }
   const starting = (async () => {
     // Some extensions access the SDK's global theme even outside the terminal UI.
     if (!chatOnly) initTheme();
@@ -2039,12 +2075,12 @@ export async function startRpcSession(
                 }
               : {}),
             appendSystemPrompt: subagentResources.appendSystemPrompt,
-            appendSystemPromptOverride: appendVisualCardPrompt,
+            appendSystemPromptOverride: appendConfiguredPiUiPrompt,
           }
         : chatOnly
           ? CHAT_ONLY_RESOURCE_LOADER_OPTIONS
         : {
-            appendSystemPromptOverride: appendVisualCardPrompt,
+            appendSystemPromptOverride: appendConfiguredPiUiPrompt,
             extensionFactories: [
               createProjectCommandBashExtension({
                 cwd: sessionCwd,
@@ -2124,15 +2160,16 @@ export async function startRpcSession(
     }
 
     const exactSystemPrompt = subagentResources?.exactSystemPrompt !== undefined
-      ? () => withVisualCardPrompt(subagentResources.exactSystemPrompt!)
+      ? () => withConfiguredPiUiPrompt(subagentResources.exactSystemPrompt!)
       : chatOnly
         ? subagentResources
-          ? () => withVisualCardPrompt(subagentResources.appendSystemPrompt[0] ?? "")
-          : () => withVisualCardPrompt(contextFilesSystemPrompt(inner.resourceLoader.getAgentsFiles().agentsFiles))
+          ? () => withConfiguredPiUiPrompt(subagentResources.appendSystemPrompt[0] ?? "")
+          : () => withConfiguredPiUiPrompt(contextFilesSystemPrompt(inner.resourceLoader.getAgentsFiles().agentsFiles))
         : undefined;
     const wrapper = new AgentSessionWrapper(inner, {
       exactSystemPrompt,
       chatOnly,
+      piUiSettingsGeneration,
       onAgentRunComplete: (completedSessionId) => {
         void notifySessionComplete(completedSessionId).catch((error) => {
           console.error("[pi-web] failed to send completion push:", error instanceof Error ? error.message : error);
@@ -2145,6 +2182,9 @@ export async function startRpcSession(
 
     return { session: wrapper, realSessionId };
   })().finally(() => {
+    for (const startingSessionId of piUiStartingSessionIds) {
+      clearPiUiStartingSessionGeneration(startingSessionId);
+    }
     locks.delete(sessionId);
     finishStartingSession();
   });

@@ -25,10 +25,10 @@ test("opens one settings panel from direct sidebar shortcuts", () => {
 });
 
 test("keeps every requested configuration surface inside the settings panel", () => {
-  for (const section of ["general", "models", "skills", "agents", "plugins"]) {
+  for (const section of ["general", "models", "pi-ui", "skills", "agents", "plugins"]) {
     assert.match(panelSource, new RegExp(`id: "${section}"`));
   }
-  for (const component of ["ModelsConfig", "SkillsConfig", "AgentsConfig", "PluginsConfig"]) {
+  for (const component of ["ModelsConfig", "PiUiConfig", "SkillsConfig", "AgentsConfig", "PluginsConfig"]) {
     assert.match(panelSource, new RegExp(`<${component} embedded`));
   }
 });
@@ -37,7 +37,7 @@ test("restores the settings section and each list detail selection", async () =>
   assert.match(shellSource, /getLastSettingsSection\(projectTrustCwd\)/);
   assert.match(panelSource, /setLastSettingsSection\(initialSection\)/);
   assert.match(panelSource, /setLastSettingsSection\(nextSection\)/);
-  for (const name of ["ModelsConfig", "SkillsConfig", "AgentsConfig", "PluginsConfig"]) {
+  for (const name of ["ModelsConfig", "PiUiConfig", "SkillsConfig", "AgentsConfig", "PluginsConfig"]) {
     assert.match(
       await readFile(new URL(`./${name}.tsx`, import.meta.url), "utf8"),
       /getLastSettingsSelection/,

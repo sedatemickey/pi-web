@@ -100,6 +100,20 @@ test("opening System or Tools lazily starts a dormant session without sending a 
   );
 });
 
+test("publishes an unpromoted draft runtime for settings reloads", () => {
+  const ensureSource = source.slice(
+    source.indexOf("  const ensureNewSession = useCallback"),
+    source.indexOf("  // Opening the System or Tools panel"),
+  );
+  assert.match(ensureSource, /sessionIdRef\.current = realId;\s*onRuntimeSessionIdChange\?\.\(realId\)/);
+  assert.match(source, /sessionHookMountedRef\.current = false;\s*onRuntimeSessionIdChange\?\.\(null\)/);
+  assert.match(appShellSource, /onRuntimeSessionIdChange=\{handleRuntimeSessionIdChange\}/);
+  assert.match(appShellSource, /draftRuntimeSession\?\.draftKey === newSessionDraftKey/);
+  assert.match(appShellSource, /sessionId=\{settingsSessionId\}/);
+  assert.match(appShellSource, /if \(selectedSession\) \{\s*setSessionKey/);
+  assert.match(appShellSource, /systemInfoLoaderRef\.current\?\.\(\)/);
+});
+
 test("new-session promotion rekeys drafts before publishing the real session", () => {
   const promoteSource = source.slice(
     source.indexOf("  const promoteNewSession = useCallback"),

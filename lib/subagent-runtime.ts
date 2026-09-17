@@ -35,7 +35,8 @@ import { buildSubagentPromptPlan } from "./subagent-prompt";
 import { appendSubagentInputFiles, loadSubagentInputFiles } from "./subagent-input";
 import { projectTrustReloadOptions } from "./project-trust";
 import { resolveShellTools } from "./powershell-settings";
-import { appendVisualCardPrompt, withVisualCardPrompt } from "./visual/prompt";
+import { appendConfiguredPiUiPrompt } from "./pi-ui-prompt";
+import { getPiUiSettingsGeneration } from "./pi-ui-session-state";
 import { isBuiltInSubagentsEnabled, readSubagentSettings } from "./subagent-settings";
 import { SubagentQueue } from "./subagent-queue";
 import { addWorktree, removeWorktree } from "./worktree";
@@ -54,7 +55,7 @@ export interface SubagentRuntimeDependencies {
   getSession(sessionId: string): HostSession | undefined;
   registerSession(
     inner: AgentSessionLike,
-    options?: { exactSystemPrompt?: string; chatOnly?: boolean },
+    options?: { exactSystemPrompt?: string; chatOnly?: boolean; piUiSettingsGeneration?: number },
   ): void;
   reopenSession(sessionId: string, sessionFile: string): Promise<HostSession>;
   resolveSessionPath(sessionId: string): Promise<string | null>;
@@ -164,6 +165,7 @@ export function createSubagentController(
       }
 
       const agentDir = getAgentDir();
+      const piUiSettingsGeneration = getPiUiSettingsGeneration();
       const parentModelRuntime = (parent.inner as unknown as { modelRuntime: ModelRuntime }).modelRuntime;
       const settingsManager = SettingsManager.create(childCwd, agentDir);
       const inheritedParentContext = inheritContext
@@ -199,7 +201,7 @@ export function createSubagentController(
               }
             : {}),
           appendSystemPrompt,
-          appendSystemPromptOverride: appendVisualCardPrompt,
+          appendSystemPromptOverride: appendConfiguredPiUiPrompt,
         },
         ...((profile.loadExtensions || profile.loadSkills)
           ? { resourceLoaderReloadOptions: projectTrustReloadOptions(childCwd, agentDir) }
@@ -255,9 +257,10 @@ export function createSubagentController(
       });
       dependencies.registerSession(inner, {
         ...(promptPlan.exactSystemPrompt !== undefined
-          ? { exactSystemPrompt: withVisualCardPrompt(promptPlan.exactSystemPrompt) }
+          ? { exactSystemPrompt: promptPlan.exactSystemPrompt }
           : {}),
         chatOnly,
+        piUiSettingsGeneration,
       });
 
       const initialRun: SubagentRunInfo = {

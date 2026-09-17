@@ -164,6 +164,80 @@ test("renders a valid visual card only when explicitly enabled", () => {
   assert.doesNotMatch(enabled, /&quot;version&quot;/);
 });
 
+test("renders interactive visual cards with semantic controls", () => {
+  const tabs = renderMarkdown(visualFence(VISUAL_CARD_CATALOG.tabs.example), { allowVisualCards: true });
+  assert.match(tabs, /data-visual-type="tabs"/);
+  assert.match(tabs, /role="tablist"/);
+  assert.match(tabs, /role="tab"/);
+  assert.match(tabs, /aria-selected="true"/);
+  assert.match(tabs, /role="tabpanel"/);
+  assert.match(tabs, /Use systemd/);
+  assert.match(tabs, /Run the service under a dedicated account/);
+
+  const accordion = renderMarkdown(visualFence(VISUAL_CARD_CATALOG.accordion.example), { allowVisualCards: true });
+  assert.match(accordion, /data-visual-type="accordion"/);
+  assert.match(accordion, /class="visual-accordion-trigger"/);
+  assert.match(accordion, /aria-expanded="true"/);
+  assert.match(accordion, /role="region"/);
+
+  const table = renderMarkdown(visualFence(VISUAL_CARD_CATALOG["data-table"].example), { allowVisualCards: true });
+  assert.match(table, /data-visual-type="data-table"/);
+  assert.match(table, /class="visual-data-table"/);
+  assert.match(table, /type="search"/);
+  assert.match(table, /aria-sort="none"/);
+  assert.match(table, /Download CSV/);
+});
+
+test("renders chart and utility visual cards through the trusted registry", () => {
+  const expectedClasses = {
+    "bar-chart": "visual-chart",
+    "line-chart": "visual-chart",
+    "area-chart": "visual-chart",
+    "donut-chart": "visual-chart",
+    sparkline: "visual-sparkline",
+    heatmap: "visual-heatmap",
+    status: "visual-status",
+    "key-value": "visual-key-value",
+    progress: "visual-progress",
+    checklist: "visual-checklist",
+    callout: "visual-callout",
+  };
+
+  for (const [type, className] of Object.entries(expectedClasses)) {
+    const html = renderMarkdown(visualFence(VISUAL_CARD_CATALOG[type].example), { allowVisualCards: true });
+    assert.match(html, new RegExp(`data-visual-type="${type}"`));
+    assert.match(html, new RegExp(`class="[^"]*${className}`));
+    assert.doesNotMatch(html, /&quot;fallback&quot;/);
+  }
+
+  const progress = renderMarkdown(visualFence(VISUAL_CARD_CATALOG.progress.example), { allowVisualCards: true });
+  assert.match(progress, /<progress/);
+  assert.match(progress, /aria-labelledby=/);
+
+  const callout = renderMarkdown(visualFence(VISUAL_CARD_CATALOG.callout.example), { allowVisualCards: true });
+  assert.match(callout, /role="note"/);
+
+  const donutExample = {
+    ...VISUAL_CARD_CATALOG["donut-chart"].example,
+    centerLabel: "Accessible center label",
+    centerValue: "Accessible center value",
+  };
+  const donut = renderMarkdown(visualFence(donutExample), { allowVisualCards: true });
+  assert.ok((donut.match(/Accessible center label/g) ?? []).length >= 3);
+  assert.ok((donut.match(/Accessible center value/g) ?? []).length >= 3);
+
+  const heatmapExample = {
+    ...VISUAL_CARD_CATALOG.heatmap.example,
+    lowLabel: "Accessible low label",
+    highLabel: "Accessible high label",
+    unit: "accessible-unit",
+  };
+  const heatmap = renderMarkdown(visualFence(heatmapExample), { allowVisualCards: true });
+  assert.ok((heatmap.match(/Accessible low label/g) ?? []).length >= 2);
+  assert.ok((heatmap.match(/Accessible high label/g) ?? []).length >= 2);
+  assert.match(heatmap, /Mon \(accessible-unit\)/);
+});
+
 test("hides incomplete visual JSON behind a streaming placeholder", () => {
   const markdown = visualFence({ ...VISUAL_CARD_CATALOG.steps.example, fallback: "unfinished-secret" }, false);
   const html = renderMarkdown(markdown, { allowVisualCards: true, isStreaming: true });

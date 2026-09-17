@@ -119,6 +119,10 @@ export function AppShell() {
     if (soundEnabledRef.current) playDoneSound();
   }, [playDoneSound, soundEnabledRef]);
   const [selectedSession, setSelectedSession] = useState<SessionInfo | null>(null);
+  const [draftRuntimeSession, setDraftRuntimeSession] = useState<{
+    draftKey: string;
+    sessionId: string | null;
+  } | null>(null);
   const [sessionCatalog, setSessionCatalog] = useState<SessionInfo[]>([]);
   const handleSessionsChange = useCallback((sessions: SessionInfo[]) => {
     setSessionCatalog(sessions);
@@ -1042,6 +1046,21 @@ export function AppShell() {
   const newSessionDraftKey = selectedSession === null && effectiveNewSessionCwd
     ? `new:${newSessionDraftId}:${effectiveNewSessionCwd}`
     : null;
+  const handleRuntimeSessionIdChange = useCallback((sessionId: string | null) => {
+    if (!newSessionDraftKey) return;
+    setDraftRuntimeSession({ draftKey: newSessionDraftKey, sessionId });
+  }, [newSessionDraftKey]);
+  const settingsSessionId = selectedSession?.id
+    ?? (draftRuntimeSession?.draftKey === newSessionDraftKey ? draftRuntimeSession.sessionId : null);
+  const handleSettingsSessionReloaded = useCallback(() => {
+    if (selectedSession) {
+      setSessionKey((key) => key + 1);
+      return;
+    }
+    void systemInfoLoaderRef.current?.().catch((error) => {
+      console.error("Failed to refresh system information after session reload:", error);
+    });
+  }, [selectedSession]);
   useLayoutEffect(() => {
     activeNewSessionDraftKeyRef.current = newSessionDraftKey;
   }, [newSessionDraftKey]);
@@ -2256,6 +2275,7 @@ export function AppShell() {
               onAttentionNeeded={handleAttentionNeeded}
               onSessionCreated={handleSessionCreated}
               onSessionForked={handleSessionForked}
+              onRuntimeSessionIdChange={handleRuntimeSessionIdChange}
               modelsRefreshKey={modelsRefreshKey}
               chatInputRef={chatInputRef}
               onBranchDataChange={handleBranchDataChange}
@@ -2435,7 +2455,7 @@ export function AppShell() {
     {settingsSection && (
       <SettingsPanel
         cwd={projectTrustCwd}
-        sessionId={selectedSession?.id ?? null}
+        sessionId={settingsSessionId}
         initialSection={settingsSection}
         quoteSelectionEnabled={quoteSelectionEnabled}
         onQuoteSelectionChange={handleQuoteSelectionChange}
@@ -2443,7 +2463,7 @@ export function AppShell() {
           setSettingsSection(null);
           setModelsRefreshKey((key) => key + 1);
         }}
-        onSessionReloaded={() => setSessionKey((key) => key + 1)}
+        onSessionReloaded={handleSettingsSessionReloaded}
       />
     )}
     {projectTrustDialogOpen && projectTrustCwd && (
