@@ -1,4 +1,37 @@
-# Pi Web
+# Pi Web（增强版）
+
+[Pi Web](https://github.com/agegr/pi-web) 的增强版，即[本仓库](https://github.com/sedatemickey/pi-web)。Pi Web 是 [pi 编程智能体](https://github.com/earendil-works/pi)的本地浏览器界面。本仓库跟随上游 `main` 更新，并加上了下面这些增强功能；分隔线以下是 Pi Web 原版 README。
+
+## 本仓库新增内容
+
+### 声明式可视化卡片（`pi-ui`）
+
+AI 回复可以在普通 Markdown 之外携带可信的声明式回复组件。模型在 `pi-ui` 围栏代码块中输出小段声明式 JSON，由可信渲染器呈现为 17 种卡片：
+
+- **基础** — `metrics`、`comparison`、`steps`
+- **交互** — `tabs`、`accordion`、`data-table`，支持键盘操作的标签页，以及可搜索、可排序、可分页的表格（含 CSV 下载）
+- **图表** — `bar-chart`、`line-chart`、`area-chart`、`donut-chart`、`sparkline`、`heatmap`，由可信渲染器静态呈现，样式由宿主控制，并为屏幕阅读器与非视觉场景提供视觉隐藏的数据表
+- **信息** — `status`、`key-value`、`progress`、`checklist`、`callout`
+
+协议围绕严格的安全与兼容边界构建：
+
+- 每个块都必须通过严格 schema 校验（类型、枚举、大小、深度和数量限制）；无效或不支持的源码会按原始代码显示，而不是渲染成坏卡片。
+- 模型只提供**数据**——不允许 HTML、脚本、URL、样式、颜色、图标、格式化函数或动作。所有外观与交互均由宿主控制。
+- 每种卡片都有 Markdown 回退、源码视图、原始/可读两种复制操作、表格的 TSV/CSV 导出，以及导出会话 HTML 时的转换。
+- 卡片随响应流式渐进渲染，代码围栏闭合即显示。
+
+### Pi UI 能力设置
+
+新增 **Pi UI** 设置页，控制模型可以生成哪些卡片类型：
+
+- 总开关加 17 个组件的独立开关，附实时预览、字段约束和 JSON 示例。
+- 设置全局存储于 `~/.pi/agent/pi-ui/settings.json`，并会从主会话、Chat-only、恢复会话和子代理的系统提示词中过滤掉未启用的卡片类型。
+- 这些开关只控制模型提示词——会话历史中已有的卡片仍会正常渲染。
+- 服务端按会话跟踪设置代次，可准确告知哪些活跃会话需要重载才能应用新的提示词，包括尚未发送消息的新建会话。
+
+完整的线格式、限制、回退行为和跨渲染器要求见 [docs/visual-cards.md](./docs/visual-cards.md)。
+
+---
 
 [English](./README.md) | [日本語](./README.ja.md) | [Русский](./README.ru.md)
 

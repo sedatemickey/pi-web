@@ -1,6 +1,6 @@
 # Pi Web (Enhanced)
 
-An enhanced version of [Pi Web](https://github.com/agegr/pi-web), the local browser UI for the [pi coding agent](https://github.com/earendil-works/pi). This fork tracks upstream `main` and adds the enhancements below; the original Pi Web README continues below the divider.
+An enhanced version of [Pi Web](https://github.com/agegr/pi-web), the local browser UI for the [pi coding agent](https://github.com/earendil-works/pi). [This fork](https://github.com/sedatemickey/pi-web) tracks upstream `main` and adds the enhancements below; the original Pi Web README continues below the divider.
 
 ## What This Fork Adds
 
