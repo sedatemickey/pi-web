@@ -22,15 +22,15 @@ function isVisualCardType(value: string): value is VisualCardType {
   return (VISUAL_CARD_TYPES as readonly string[]).includes(value);
 }
 
-function settingsResponse(settings: PiUiSettings, request?: Request) {
-  const sessionId = request ? new URL(request.url).searchParams.get("sessionId") : null;
+function settingsResponse(settings: PiUiSettings, request: Request) {
+  const sessionId = new URL(request.url).searchParams.get("sessionId");
   return NextResponse.json({
     ...settings,
     ...(sessionId ? { reloadRequired: isPiUiSessionPromptStale(sessionId) } : {}),
   });
 }
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   try {
     return settingsResponse(readPiUiSettings(), request);
   } catch (error) {

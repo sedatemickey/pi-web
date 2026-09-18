@@ -36,6 +36,11 @@ function allEnabled() {
   return Object.fromEntries(VISUAL_CARD_TYPES.map((type) => [type, true]));
 }
 
+function getRequest(sessionId) {
+  const query = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+  return new Request(`http://localhost/api/pi-ui/settings${query}`);
+}
+
 function request(body, { contentType = "application/json", host = "localhost", method = "PUT", sessionId } = {}) {
   const query = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
   return new Request(`http://localhost/api/pi-ui/settings${query}`, {
@@ -46,7 +51,7 @@ function request(body, { contentType = "application/json", host = "localhost", m
 }
 
 test("GET returns the complete default settings", async () => {
-  const response = await GET();
+  const response = await GET(getRequest());
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { enabled: true, components: allEnabled() });
 });
@@ -69,7 +74,7 @@ test("PUT persists a partial update and returns complete settings", async () => 
   assert.equal(stored.components.metrics, false);
   assert.equal(stored.components.callout, true);
 
-  response = await GET();
+  response = await GET(getRequest());
   assert.deepEqual(await response.json(), {
     enabled: false,
     components: { ...allEnabled(), metrics: false },
@@ -79,7 +84,7 @@ test("PUT persists a partial update and returns complete settings", async () => 
 test("reports server-authoritative reload state for live sessions", async () => {
   const sessionId = "live-session";
   setPiUiSessionGeneration(sessionId, getPiUiSettingsGeneration());
-  let response = await GET(new Request(`http://localhost/api/pi-ui/settings?sessionId=${sessionId}`));
+  let response = await GET(getRequest(sessionId));
   assert.equal((await response.json()).reloadRequired, false);
 
   response = await PUT(request({ components: { comparison: false } }, { sessionId }));
@@ -87,7 +92,7 @@ test("reports server-authoritative reload state for live sessions", async () => 
   assert.equal((await response.json()).reloadRequired, true);
 
   setPiUiSessionGeneration(sessionId, getPiUiSettingsGeneration());
-  response = await GET(new Request(`http://localhost/api/pi-ui/settings?sessionId=${sessionId}`));
+  response = await GET(getRequest(sessionId));
   assert.equal((await response.json()).reloadRequired, false);
   clearPiUiSessionGeneration(sessionId);
 });
@@ -156,7 +161,7 @@ test("PUT enforces request security and JSON content type", async () => {
 test("GET returns 500 for damaged settings", async () => {
   const backup = await readFile(settingsPath, "utf8");
   await writeFile(settingsPath, "{");
-  const response = await GET();
+  const response = await GET(getRequest());
   assert.equal(response.status, 500);
   assert.match((await response.json()).error, /JSON/);
   await writeFile(settingsPath, backup);
